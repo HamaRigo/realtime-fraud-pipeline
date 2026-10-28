@@ -4,7 +4,9 @@
 
 Built as an end-of-studies engineering project (PFE) for a banking context: bank operators upload a client's document, the pipeline extracts its content with OCR, a fraud-analysis service returns a risk score, and the verdict is persisted and broadcast in near real time — with SSO, distributed tracing and a full observability stack behind it.
 
-![Architecture](Backend/doc/Architecture-microservices-avec-Spring-Cloud.jpg)
+![Spring Cloud microservices reference architecture](Backend/doc/Architecture-microservices-avec-Spring-Cloud.jpg)
+
+*The Spring Cloud reference topology this platform implements — API Gateway + Eureka discovery + Git-backed Config Server + Zipkin tracing in front of independently-deployable services.*
 
 ---
 

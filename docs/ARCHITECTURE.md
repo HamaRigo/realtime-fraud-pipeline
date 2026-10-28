@@ -28,6 +28,12 @@ The platform is a **Maven multi-module Spring Boot 3.3 / Spring Cloud 2023.0 app
                      Kafka :9092 (Zookeeper :2181) — topic "ocr-results"
 ```
 
+### Reference pattern
+
+The platform follows the canonical Spring Cloud topology shown below — a UI/API Gateway in front of independently-registered REST services, with a Eureka discovery server, a Git-backed Config Server and Zipkin distributed tracing. *(The service names in the diagram are the generic reference example; the concrete modules and ports are the ones listed in §2.)*
+
+![Spring Cloud microservices reference architecture](../Backend/doc/Architecture-microservices-avec-Spring-Cloud.jpg)
+
 ## 2. Module responsibilities
 
 | Module | Port | Key dependencies | Notes |
