@@ -2,7 +2,7 @@
 
 > `ocr-module` (Spring Boot, port **3333**) is the heart of the platform: a reactive, async, event-driven pipeline that turns an uploaded bank document into an OCR transcript + a real-time fraud verdict, persists it, and broadcasts it to Kafka.
 
-This document zooms into the module's technologies and features for interview/reviewer deep-dives. Related: [Architecture §3](ARCHITECTURE.md) · [API reference](API.md).
+This document zooms into the module's technologies and features for a technical deep-dive. Related: [Architecture §3](ARCHITECTURE.md) · [API reference](API.md).
 
 ---
 
@@ -75,7 +75,7 @@ Two Docker Compose profiles exist for the module:
 
 ---
 
-## 🗺 Roadmap / in-progress (honesty for interviews)
+## 🗺 Roadmap / in-progress
 
 These were the last incomplete parts of the module; the pipeline is now **build-complete**.
 

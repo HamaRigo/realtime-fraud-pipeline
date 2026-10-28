@@ -209,17 +209,3 @@ React 18 + TypeScript SPA (Bootstrap 5 admin template):
 **Hamza Rigo** — Full-stack / Java Spring & AI-oriented engineer
 GitHub: [@HamaRigo](https://github.com/HamaRigo)
 
----
-
-<details>
-<summary>📎 Where to look in the code (for interview prep)</summary>
-
-- Async event-driven pipeline: `Backend/ocr-module/.../Service/OcrService.java`
-- Multi-format ingestion & OCR tuning: `Backend/ocr-module/.../Service/ImageConverter.java`, `resources/ocr.xml` — overview in [docs/OCR-MODULE.md](docs/OCR-MODULE.md)
-- Gateway routes & JWT security: `Backend/api-gateway/src/main/resources/application.properties`
-- Keycloak realm definition: `Backend/api-gateway/docker/keycloak/realms/`
-- Shared domain model: `Backend/shared-module/src/main/java/dev/atb/`
-- Full infra topology: `Backend/docker-compose.yml`
-- Frontend SSO & route guards: `Frontend/src/keycloak.js`, `Frontend/src/routes/ProtectedRoute.tsx`
-
-</details>
