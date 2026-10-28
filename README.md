@@ -16,6 +16,7 @@ Built as an end-of-studies engineering project (PFE) for a banking context: bank
 - **Security by design** — Keycloak OIDC realm (JWT) on the API gateway and every resource server, role-based route protection, reactive Spring Security.
 - **Observability** — centralized logging (Fluentd → Elasticsearch), metrics & alerting (Prometheus + Grafana), distributed tracing (Micrometer Tracing + Zipkin), Spring Boot Actuator.
 - **Containerized infra** — 11 services in a single `docker compose up`: MySQL 8, Keycloak, Tesseract OCR Flask service, Python signature-matching/fraud service, Kafka, Zookeeper, NGINX, Fluentd, Elasticsearch, Prometheus, Grafana.
+- **OCR module deep-dive** — reactive async ingestion, PDFBox multi-format conversion, tuned multilingual Tesseract, graceful fraud-score integration: see [docs/OCR-MODULE.md](docs/OCR-MODULE.md).
 - **Typed React frontend** — TypeScript + Keycloak-js SSO login, protected routes, apexcharts operator dashboard.
 
 ---
@@ -24,16 +25,32 @@ Built as an end-of-studies engineering project (PFE) for a banking context: bank
 
 Banks process huge volumes of paper documents (cheques, *effets*, IDs) whose manual verification is slow and fraud-prone. This platform automates the chain:
 
-1. An operator uploads a document image/PDF tied to a bank account.
-2. The image is preprocessed (grayscale, contrast, resize, skew correction) and OCR'd by Tesseract with multilingual models (`fra + ara + eng`).
-3. The document is sent to a fraud-analysis service that returns a **risk score** (0–1); a score above the **0.7 threshold** flags the document as fraudulent.
+1. An operator uploads a document (PNG/JPEG/PDF/HEIC) tied to a bank account; the file is validated (type + size) and normalized to high-DPI PNG.
+2. A tuned **Tesseract 4** engine extracts the text with multilingual models (`fra + ara + eng`).
+3. The document is sent to a fraud-analysis service that returns a **risk score** (0–1); a score above the **0.7 threshold** flags the document as fraudulent (outages degrade gracefully, never break the pipeline).
 4. The result (extracted text, verdict, score, preview image) is stored against the client's account and published to Kafka for any downstream consumer (alerting, audit, analytics).
 
 The pipeline steps are implemented exactly as designed in [OcrService.java](Backend/ocr-module/src/main/java/dev/atb/ocr/Service/OcrService.java):
 
 ```
-upload → validate & preprocess → Tesseract OCR → fraud-score API → persist (MySQL) → publish (Kafka)
+upload → validate & normalize (PDFBox/HEIC→PNG @300DPI) → Tesseract OCR (fra+ara+eng) → fraud-score API (0.7) → persist (MySQL) → publish (Kafka)
 ```
+
+---
+
+## 🔍 OCR & Fraud-Detection Module — spotlight
+
+**Deep dive:** [docs/OCR-MODULE.md](docs/OCR-MODULE.md)
+
+The `ocr-module` (port 3333) is the technical centrepiece. Technologies & features on display:
+
+- **Reactive + async pipeline** — Spring WebFlux with `@Async` / `CompletableFuture`, so slow OCR/fraud round-trips never block the request thread.
+- **Multi-format ingestion** — Apache **PDFBox** (PDF→PNG @ 300 DPI), `javax.imageio` (JPG→PNG), Cloudinary (HEIC pathway).
+- **Tuned multilingual OCR** — **Tesseract 4** via Tess4J 5.4.0, languages `fra+ara+eng`, engine config (`ocr.xml`): char whitelist, page-segmentation mode, space preservation.
+- **Real-time fraud scoring** — external `fraud-check` API returning `fraud_score`, 0.7 decision threshold, graceful degradation on outage.
+- **Event-driven fan-out** — Spring Kafka producer publishing every result to topic `ocr-results`.
+- **Auditable persistence** — Spring Data JPA + MySQL + Flyway, base64 image `@Lob`, `@PrePersist`/`@PreUpdate` audit columns, LAZY account link.
+- **Defensive design** — 3-layer input validation, typed `OcrProcessingException`, unified `ApiResponse` envelope, Builder pattern (`OcrServiceBuilder`), externalized config (`OcrConfig`).
 
 ---
 
@@ -94,7 +111,7 @@ client :4444  compte :5555   ocr :3333       credit :2222   user :7777
 | `api-gateway` | 8187 | Reactive gateway: routing, load balancing, Keycloak JWT validation, Zipkin tracing |
 | `client-module` | 4444 | Bank client (customer) CRUD |
 | `compte-module` | 5555 | Accounts (checking / savings) |
-| `ocr-module` | 3333 | ⭐ Core pipeline: upload, OCR, fraud scoring, persistence, Kafka publishing |
+| `ocr-module` | 3333 | ⭐ Core pipeline: upload, OCR, fraud scoring, persistence, Kafka publishing — [feature spotlight](docs/OCR-MODULE.md) |
 | `credit-module` | 2222 | Credit/loan management with status workflow |
 | `user-module` | 7777 | Users & roles (RBAC) |
 | `shared-module` | — | Library: entities, DTOs, repositories, OpenAPI config |
@@ -193,6 +210,7 @@ GitHub: [@HamaRigo](https://github.com/HamaRigo)
 <summary>📎 Where to look in the code (for interview prep)</summary>
 
 - Async event-driven pipeline: `Backend/ocr-module/.../Service/OcrService.java`
+- Multi-format ingestion & OCR tuning: `Backend/ocr-module/.../Service/ImageConverter.java`, `resources/ocr.xml` — overview in [docs/OCR-MODULE.md](docs/OCR-MODULE.md)
 - Gateway routes & JWT security: `Backend/api-gateway/src/main/resources/application.properties`
 - Keycloak realm definition: `Backend/api-gateway/docker/keycloak/realms/`
 - Shared domain model: `Backend/shared-module/src/main/java/dev/atb/`

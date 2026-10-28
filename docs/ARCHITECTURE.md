@@ -52,7 +52,7 @@ Stages (design steps 1–7 as implemented):
 
 1. **Upload & validation** — multipart file (PNG/JPEG/PDF, ≤10 MB) + `typeDocument` + account `id`; content-type allow-list and bean validation reject anything else.
 2. **Temporary materialization** — file written to a temp path with `deleteOnExit` cleanup in a `finally` block.
-3. **OCR** — `RestTemplate POST → http://…:5006/ocr` (Tesseract 4 Flask container, languages `fra+ara+eng`; preprocessing via `ImageConverter`: grayscale, contrast, resize, skew correction — tessdata shared through a Docker volume).
+3. **OCR** — `RestTemplate POST → http://…:5006/ocr` (Tesseract 4 Flask container, languages `fra+ara+eng`; input normalized to PNG by `ImageConverter` — PDFBox renders PDFs at 300 DPI, JPG/HEIC converted via `javax.imageio`/Cloudinary; engine tuned in `ocr.xml` — char whitelist, page-segmentation mode — tessdata shared through a Docker volume).
 4. **Fraud scoring** — `POST → http://…:5005/fraud-check` returns JSON `{ "fraud_score": 0.0–1.0 }`. Failures **degrade gracefully** (logged, score 0.0) instead of breaking the pipeline.
 5. **Decision** — `fraud = fraudScore > 0.7` (configurable threshold constant).
 6. **Persistence** — `Ocr` entity saved against the client's `Compte` (account number link) in MySQL; Flyway manages schema.
