@@ -76,13 +76,13 @@ Two Docker Compose profiles exist for the module:
 
 ## 🗺 Roadmap / in-progress (honesty for interviews)
 
-These are designed or partially referenced but **not yet fully implemented** in the codebase — be ready to discuss them as next steps rather than shipped features:
+These were the last incomplete parts of the module; the pipeline is now **build-complete**.
 
-- **Signature verification** — `SignatureService` is referenced by `OcrService`/`OcrServiceBuilder` but the class is not present. The intended algorithm (OpenCV ORB keypoints + homography alignment + similarity threshold) is specified in [`Backend/README.md`](../Backend/README.md).
-- **Notifications** — `LoggerService` / `NotificationService` are wired into the service constructor but not yet implemented.
-- **ML classifier** — the current fraud score comes from an external API; the planned replacement is a fine-tuned **InceptionV3 / TensorFlow** transfer-learning model with quantization-aware export (design in `Backend/README.md`).
+- ✅ **Signature verification** — [`SignatureService`](../Backend/ocr-module/src/main/java/dev/atb/ocr/Service/SignatureService.java) now calls the Python signature-matching micro-service (`signature.api.url/verify`), returning a 0–1 similarity score with the same graceful-degradation contract as the fraud scorer. The underlying OpenCV ORB + homography algorithm lives in the Python service (specified in [`Backend/README.md`](../Backend/README.md)).
+- ✅ **Notifications** — [`NotificationService`](../Backend/ocr-module/src/main/java/dev/atb/ocr/notification/NotificationService.java) publishes a fraud alert to the Kafka topic `fraud-alerts` whenever `OcrService.uploadAndAnalyze` flags a document; [`LoggerService`](../Backend/ocr-module/src/main/java/dev/atb/ocr/notification/LoggerService.java) is the shared SLF4J wrapper.
+- ⏳ **ML classifier** — the current fraud score still comes from the external `fraud-check` API; the planned replacement is a fine-tuned **InceptionV3 / TensorFlow** transfer-learning model with quantization-aware export (design in `Backend/README.md`).
 
-> ⚠️ Until the referenced classes above are added, the module will not compile. This is the single highest-value "finishing" task before demoing.
+> ✔️ `mvn -pl ocr-module -am compile` succeeds on **JDK 17** (build against 17, not 23 — Lombok is incompatible with JDK 23 here). Also fixed along the way: a missing springdoc dependency in `shared-module` and two pre-existing `ocr-module` compile errors (`@RequestBody` misuse, dead `MultipartFileUtil`).
 
 ---
 

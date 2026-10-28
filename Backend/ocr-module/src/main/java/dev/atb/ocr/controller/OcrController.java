@@ -61,7 +61,7 @@ public class OcrController {
      */
     @PostMapping("/perform-and-preview")
     public ResponseEntity<OcrDTO> performOcrAndPreview(
-            @RequestBody("file") MultipartFile file,
+            @RequestPart("file") MultipartFile file,
             @RequestParam("typeDocument") String typeDocument) {
 
         logger.info("📑 Performing OCR & Preview on file: file", file.getOriginalFilename());

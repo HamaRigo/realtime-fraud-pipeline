@@ -65,6 +65,13 @@
             <artifactId>jakarta.validation-api</artifactId>
         </dependency>
 
+        <!-- springdoc-openapi: provides io.swagger.v3.oas.models used by SpringDocConfig -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-common</artifactId>
+            <version>2.6.0</version>
+        </dependency>
+
 
     </dependencies>
 </project>

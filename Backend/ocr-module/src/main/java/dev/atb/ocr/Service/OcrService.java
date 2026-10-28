@@ -91,6 +91,9 @@ public class OcrService {
             OcrDTO result = buildOcrDTO(documentType, ocrResult, base64Image, fraudScore > 0.7, fraudScore);
             persistResult(result, account);
             notifyKafka(result);
+            if (result.isFraud()) {
+                notificationService.notifyFraudDetected(result);
+            }
 
             return result;
         } finally {
