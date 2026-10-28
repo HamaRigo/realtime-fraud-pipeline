@@ -92,3 +92,11 @@ Error handling: `400` on invalid file type / missing fields (`MultipartException
 |---|---|---|
 | Tesseract OCR (Flask, `:5006`) | `POST /ocr` (multipart `file`) | `ocr-module` → `ocr.api.url` |
 | Fraud / signature service (Flask, `:5005`) | `POST /fraud-check` → `{ "fraud_score": 0.0–1.0 }` | `ocr-module` → `fraud.api.url` |
+| Fraud / signature service (Flask, `:5005`) | `POST /verify` (multipart `document` + `reference`) → `{ "similarity": 0.0–1.0 }` | `ocr-module` → `signature.api.url` (`SignatureService`) |
+
+## 📨 Kafka topics (produced by `ocr-module`)
+
+| Topic | Payload | When |
+|---|---|---|
+| `ocr-results` | `OcrDTO` JSON | every completed analysis |
+| `fraud-alerts` | `OcrDTO` JSON | only when a document is flagged fraudulent (`NotificationService`) |

@@ -53,10 +53,10 @@ Stages (design steps 1–7 as implemented):
 1. **Upload & validation** — multipart file (PNG/JPEG/PDF, ≤10 MB) + `typeDocument` + account `id`; content-type allow-list and bean validation reject anything else.
 2. **Temporary materialization** — file written to a temp path with `deleteOnExit` cleanup in a `finally` block.
 3. **OCR** — `RestTemplate POST → http://…:5006/ocr` (Tesseract 4 Flask container, languages `fra+ara+eng`; input normalized to PNG by `ImageConverter` — PDFBox renders PDFs at 300 DPI, JPG/HEIC converted via `javax.imageio`/Cloudinary; engine tuned in `ocr.xml` — char whitelist, page-segmentation mode — tessdata shared through a Docker volume).
-4. **Fraud scoring** — `POST → http://…:5005/fraud-check` returns JSON `{ "fraud_score": 0.0–1.0 }`. Failures **degrade gracefully** (logged, score 0.0) instead of breaking the pipeline.
+4. **Fraud scoring** — `POST → http://…:5005/fraud-check` returns JSON `{ "fraud_score": 0.0–1.0 }`. Failures **degrade gracefully** (logged, score 0.0) instead of breaking the pipeline. `SignatureService` can likewise call `http://…:5005/verify` (OpenCV ORB + homography) for a signature-similarity score.
 5. **Decision** — `fraud = fraudScore > 0.7` (configurable threshold constant).
 6. **Persistence** — `Ocr` entity saved against the client's `Compte` (account number link) in MySQL; Flyway manages schema.
-7. **Event publication** — the DTO is serialized and published to Kafka topic **`ocr-results`**, decoupling detection from consumers (alerts, audit, analytics).
+7. **Event publication** — the DTO is serialized and published to Kafka topic **`ocr-results`**, decoupling detection from consumers (audit, analytics). When the document is flagged fraudulent, `NotificationService` additionally publishes to topic **`fraud-alerts`** for real-time operator alerting.
 
 The image itself is round-tripped as base64 so the operator UI can preview the flagged document without a second fetch. Auxiliary endpoints: `/ocrs/fraud-detection` (standalone check), `/perform-and-preview` (OCR preview, currently disabled), and full CRUD on stored results.
 
@@ -70,7 +70,7 @@ The image itself is round-tripped as base64 so the operator UI can preview the f
 
 ## 5. Event streaming
 
-Kafka (Confluent image, Zookeeper coordinator — both health-checked) on `kafka:9092` inside `shared-network`. The `ocr-module` is the producer (`spring-kafka`, group `ocr-group`) publishing `OcrDTO` JSON to `ocr-results`. Consumers can be added without touching the detection path — the classic event-driven decoupling argument that also motivated the shared-model library.
+Kafka (Confluent image, Zookeeper coordinator — both health-checked) on `kafka:9092` inside `shared-network`. The `ocr-module` is the producer (`spring-kafka`, group `ocr-group`) publishing `OcrDTO` JSON to two topics: **`ocr-results`** (every completed analysis) and **`fraud-alerts`** (only fraud-flagged documents, dispatched by `NotificationService`). Consumers can be added without touching the detection path — the classic event-driven decoupling argument that also motivated the shared-model library.
 
 ## 6. Observability & infrastructure (`Backend/docker-compose.yml`)
 
@@ -100,5 +100,5 @@ JUnit per-module tests (`src/test`), **Testcontainers 1.17 BOM** managed central
 
 - **Shared database** (`shared_database`) — pragmatic for a PFE; the target is database-per-service with the gateway as the seam.
 - **Zookeeper-based Kafka** — migration path to KRaft is a config change.
-- **Heuristic fraud scoring endpoint** — designed replacement with a fine-tuned InceptionV3/TensorFlow classifier (transfer learning, signature alignment via ORB + homography, quantization-aware deployment) is fully specified in [`Backend/README.md`](../Backend/README.md).
+- **Heuristic fraud scoring endpoint** — the score comes from an external `fraud-check` API (`SignatureService` similarly calls the `/verify` micro-service); the designed replacement is a fine-tuned InceptionV3/TensorFlow classifier (transfer learning, ORB + homography signature alignment, quantization-aware deployment) fully specified in [`Backend/README.md`](../Backend/README.md). The Java-side service contracts are in place; the Python model training is the remaining piece.
 - **Kubernetes** — layered Dockerfiles (`Dockerfile.layered`) already prepare small incremental images for a Helm-based deployment.

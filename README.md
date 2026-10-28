@@ -12,7 +12,7 @@ Built as an end-of-studies engineering project (PFE) for a banking context: bank
 
 - **Microservices at scale** — 9 Spring Boot 3 / Spring Cloud modules (discovery, gateway, config, 5 business services, shared library) orchestrated as one Maven multi-module build.
 - **Realtime async pipeline** — document upload → preprocessing → Tesseract OCR (French + Arabic + English) → ML fraud scoring → DB persistence → Kafka event publication, executed with `@Async` / `CompletableFuture`.
-- **Event-driven core** — Kafka (Zookeeper-backed) topic `ocr-results` decouples detection from downstream consumers.
+- **Event-driven core** — Kafka (Zookeeper-backed) topics `ocr-results` (analysis fan-out) and `fraud-alerts` (real-time alerts) decouple detection from downstream consumers.
 - **Security by design** — Keycloak OIDC realm (JWT) on the API gateway and every resource server, role-based route protection, reactive Spring Security.
 - **Observability** — centralized logging (Fluentd → Elasticsearch), metrics & alerting (Prometheus + Grafana), distributed tracing (Micrometer Tracing + Zipkin), Spring Boot Actuator.
 - **Containerized infra** — 11 services in a single `docker compose up`: MySQL 8, Keycloak, Tesseract OCR Flask service, Python signature-matching/fraud service, Kafka, Zookeeper, NGINX, Fluentd, Elasticsearch, Prometheus, Grafana.
@@ -48,7 +48,8 @@ The `ocr-module` (port 3333) is the technical centrepiece. Technologies & featur
 - **Multi-format ingestion** — Apache **PDFBox** (PDF→PNG @ 300 DPI), `javax.imageio` (JPG→PNG), Cloudinary (HEIC pathway).
 - **Tuned multilingual OCR** — **Tesseract 4** via Tess4J 5.4.0, languages `fra+ara+eng`, engine config (`ocr.xml`): char whitelist, page-segmentation mode, space preservation.
 - **Real-time fraud scoring** — external `fraud-check` API returning `fraud_score`, 0.7 decision threshold, graceful degradation on outage.
-- **Event-driven fan-out** — Spring Kafka producer publishing every result to topic `ocr-results`.
+- **Signature verification** — `SignatureService` calls the OpenCV signature-matching micro-service (`/verify`) for a 0–1 similarity score, same graceful-degradation contract.
+- **Event-driven fan-out** — Spring Kafka producers publish every result to topic `ocr-results` and, when fraud is flagged, an alert to `fraud-alerts`.
 - **Auditable persistence** — Spring Data JPA + MySQL + Flyway, base64 image `@Lob`, `@PrePersist`/`@PreUpdate` audit columns, LAZY account link.
 - **Defensive design** — 3-layer input validation, typed `OcrProcessingException`, unified `ApiResponse` envelope, Builder pattern (`OcrServiceBuilder`), externalized config (`OcrConfig`).
 
@@ -90,9 +91,9 @@ client :4444  compte :5555   ocr :3333       credit :2222   user :7777
                                    │
                      MySQL 8 :3306 ▼            Flask services (Docker)
                                   │        Tesseract OCR :5006 ──► /ocr
-                                  │        fraud & signature :5005 ──► /fraud-check
+                                  │        fraud & signature :5005 ──► /fraud-check · /verify
                                   ▼
-                     Kafka :9092 ── topic "ocr-results" ──► downstream consumers
+                     Kafka :9092 ── topics "ocr-results" + "fraud-alerts" ──► downstream consumers
 ```
 
 - **Discovery**: Eureka (`discovery-server :8761`) — every service registers itself.
@@ -111,7 +112,7 @@ client :4444  compte :5555   ocr :3333       credit :2222   user :7777
 | `api-gateway` | 8187 | Reactive gateway: routing, load balancing, Keycloak JWT validation, Zipkin tracing |
 | `client-module` | 4444 | Bank client (customer) CRUD |
 | `compte-module` | 5555 | Accounts (checking / savings) |
-| `ocr-module` | 3333 | ⭐ Core pipeline: upload, OCR, fraud scoring, persistence, Kafka publishing — [feature spotlight](docs/OCR-MODULE.md) |
+| `ocr-module` | 3333 | ⭐ Core pipeline: upload, OCR, fraud scoring, signature verification, persistence, Kafka publishing & fraud alerts — [feature spotlight](docs/OCR-MODULE.md) |
 | `credit-module` | 2222 | Credit/loan management with status workflow |
 | `user-module` | 7777 | Users & roles (RBAC) |
 | `shared-module` | — | Library: entities, DTOs, repositories, OpenAPI config |
@@ -121,7 +122,9 @@ client :4444  compte :5555   ocr :3333       credit :2222   user :7777
 ## 🚀 Quick start
 
 ### Prerequisites
-Docker & Docker Compose · Java 17 · Maven · Node.js 18+
+Docker & Docker Compose · **Java 17** · Maven · Node.js 18+
+
+> ⚠️ Build with **JDK 17**, not 23 — Lombok's managed version fails to generate getters/setters on JDK 23, breaking compilation. Quick check: `mvn -pl ocr-module -am compile`.
 
 ### 1. Boot the infrastructure (MySQL, Keycloak, Kafka, OCR & fraud services, observability)
 
@@ -194,7 +197,7 @@ React 18 + TypeScript SPA (Bootstrap 5 admin template):
 ## 🗺 Roadmap
 
 - [ ] Replace heuristic scoring with a trained TensorFlow model (InceptionV3 transfer learning — design done, see [Backend/README.md](Backend/README.md))
-- [ ] Signature verification service integration (ORB feature matching + homography alignment)
+- [x] Signature verification service integration (`SignatureService` wired to the OpenCV `/verify` micro-service; ORB + homography algorithm lives on the Python side)
 - [ ] Swagger/OpenAPI aggregation at gateway level
 - [ ] Kubernetes manifests + Helm charts
 - [ ] CI/CD pipeline (build → test → layered Docker images → deploy)

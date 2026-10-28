@@ -15,7 +15,8 @@ This document zooms into the module's technologies and features for interview/re
 | Multilingual text extraction (fra + ara + eng) | Tess4J 5.4.0 + Tesseract 4 Flask service | [`application.properties`](../Backend/ocr-module/src/main/resources/application.properties), [`ocr.xml`](../Backend/ocr-module/src/main/resources/ocr.xml) |
 | OCR engine tuning | char whitelist, page-segmentation mode, space preservation | [`ocr.xml`](../Backend/ocr-module/src/main/resources/ocr.xml) |
 | Real-time fraud scoring | REST call → `fraud_score` (0–1) + 0.7 decision threshold | `OcrService.detectFraudScore` |
-| Event-driven downstream fan-out | Spring Kafka producer → topic `ocr-results` | `OcrService.notifyKafka` |
+| Signature verification | REST call → similarity score (0–1), graceful fallback to 0.0 | [`SignatureService`](../Backend/ocr-module/src/main/java/dev/atb/ocr/Service/SignatureService.java) |
+| Event-driven downstream fan-out | Spring Kafka producers → topics `ocr-results` + `fraud-alerts` | `OcrService.notifyKafka`, [`NotificationService`](../Backend/ocr-module/src/main/java/dev/atb/ocr/notification/NotificationService.java) |
 | Persistent audit trail | Spring Data JPA + MySQL 8 + Flyway, base64 image LOB, audit timestamps | [`Ocr`](../Backend/shared-module/src/main/java/dev/atb/models/Ocr.java) entity |
 | Config-driven behaviour | `@ConfigurationProperties("ocr.tesseract")`, externalized API URLs | [`OcrConfig`](../Backend/ocr-module/src/main/java/dev/atb/ocr/config/OcrConfig.java) |
 | Hardened input validation | Content-type allow-list, 10 MB size cap, Bean Validation | [`FileValidationService`](../Backend/ocr-module/src/main/java/dev/atb/ocr/Service/FileValidationService.java), controller |
@@ -43,11 +44,11 @@ Text extraction targets a **Tesseract 4** engine (Dockerised Flask service, `POS
 - `tessedit_pageseg_mode=3` for sparse-text handling,
 - `preserve_interword_spaces` to keep cheque/fee layouts readable.
 
-### 4. Real-time fraud scoring
-`detectFraudScore` ships the document to a dedicated **fraud-analysis API** (`POST /fraud-check` → `{ "fraud_score": … }`) and applies a **0.7 decision threshold** to flag the document. Crucially, the integration **degrades gracefully**: any fraud-API outage is logged and returns `0.0` rather than aborting the whole pipeline — an availability-first design worth calling out in review.
+### 4. Real-time fraud scoring & signature verification
+`detectFraudScore` ships the document to a dedicated **fraud-analysis API** (`POST /fraud-check` → `{ "fraud_score": … }`) and applies a **0.7 decision threshold** to flag the document. `SignatureService` calls the OpenCV **signature-matching** micro-service (`POST /verify`) for a 0–1 similarity score. Crucially, both integrations **degrade gracefully**: any outage is logged and returns `0.0` rather than aborting the whole pipeline — an availability-first design worth calling out in review.
 
 ### 5. Event-driven fan-out
-Every completed analysis is serialized (`ObjectMapper`) and published to the Kafka topic **`ocr-results`**. Alerting, audit and analytics consumers can subscribe without the detection path knowing they exist — textbook event-driven decoupling.
+Every completed analysis is serialized (`ObjectMapper`) and published to the Kafka topic **`ocr-results`**. When a document is flagged fraudulent, `NotificationService` also publishes an alert to the topic **`fraud-alerts`**. Alerting, audit and analytics consumers can subscribe without the detection path knowing they exist — textbook event-driven decoupling.
 
 ### 6. Persistent, auditable results
 The `Ocr` JPA entity stores document type, OCR transcript, fraud flag, account link (`@ManyToOne` **LAZY** to `Compte`), the **base64 image as `@Lob`** for instant UI preview, and automatic `createdAt`/`updatedAt` audit columns (`@PrePersist`/`@PreUpdate`). Schema is versioned with **Flyway** (`V1__Initial_setup.sql`).
